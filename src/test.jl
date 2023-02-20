@@ -103,7 +103,7 @@ function fill_storage(storage)
             joints_vel[j][i-myfirst+1] = qvel[i*9+j]
             set_minimal_coordinates!(mech, joints[j], [qpos[i*9+j]])
         end
-        gripper_pos[1][i-myfirst+1] = norm(mech.bodies[1].state.x1)
+        gripper_pos_mujoco[1][i-myfirst+1] = norm(mech.bodies[1].state.x1)
         gripper_vel[1][i-myfirst+1] = norm(mech.bodies[1].state.v15)
         for j = 1:9
             storage.x[j][i-myfirst+1] = mech.bodies[j].state.x1
@@ -206,7 +206,7 @@ function pid!(joint, pos, vel, err_sum, j)
 end
 
 function controller!(mechanism, t)
-    gripper_pos[1][t] = norm(mech.bodies[1].state.x1-obj_pos)
+    gripper_pos_pid[1][t] = norm(mech.bodies[1].state.x1-obj_pos)
     gripper_vel[1][t] = norm(mech.bodies[1].state.v15)
     global cost
     for j = 1:9
@@ -244,13 +244,13 @@ storage = Storage(steps, 9)
 t = range(1, steps)
 joints_pos = [zeros(steps) for _ in 1:7]
 joints_vel = [zeros(steps) for _ in 1:7]
-gripper_pos = [zeros(steps)]
+gripper_pos_mujoco = [zeros(steps)]
 # gripper_pos_sg = [zeros(steps)]
 gripper_vel = [zeros(steps)]
 fill_storage(storage)
 visualize(mech, storage);
 gripper_pos_sg = savitzky_golay(gripper_pos[1], 41, 2)
-p = plot(t, gripper_pos)
+p = plot(t, gripper_pos_mujoco)
 savefig(p, "plots/mujoco_pos_gripper.png")
 # p = plot(t[400:500], [gripper_pos[1][400:500], gripper_pos_sg.y[400:500]])
 savefig(p, "plots/mujoco_pos_gripper_sg.png")
@@ -271,7 +271,7 @@ t = range(1, steps)
 controls = [zeros(steps) for _ in 1:7]
 joints_pos = [zeros(steps) for _ in 1:7]
 joints_vel = [zeros(steps) for _ in 1:7]
-gripper_pos = [zeros(steps) for _ in 1:3]
+gripper_pos_pid = [zeros(steps) for _ in 1:3]
 gripper_vel = [zeros(steps) for _ in 1:3]
 err_sum = zeros(9)
 cost = 0
@@ -288,7 +288,7 @@ println("Max joint angle:", max_angle)
 println("Min joint angle:", min_angle)
 visualize(mech, storage_pid);
 close(f)
-p = plot(t, gripper_pos)
+p = plot(t, gripper_pos_pid)
 savefig(p, "plots/original_pos_gripper.png")
 p = plot(t, gripper_vel)
 savefig(p, "plots/original_vel_gripper.png")
@@ -349,8 +349,8 @@ function controller_smooth!(mechanism, t)
 end
 ##
 # Smooth the trajectory based on joints
-steps = 460
-smooth_steps = 460
+steps = 440
+smooth_steps = 440
 qpos_smooth, qvel_smooth = smooth(qpos[myfirst*9+1:myfirst*9+9], qpos[mylast*9+1:mylast*9+9], zeros(9), 50, smooth_steps, true, 9)
 initialize()
 t = range(1, steps)
@@ -453,15 +453,15 @@ function get_endeffector_traj(myfirst, mylast, qpos)
     close(f)
 end
 
-function read_end_effector(steps)
-    efpos = [zeros(6) for _ = 1:steps]
+function read_end_effector(steps, buffer)
+    efpos = [zeros(6) for _ = 1:steps+buffer]
     f = open("data/end_effector.txt", "r")
     step = 0
     while !eof(f)
         step += 1
         for i = 1:6
             s = readline(f)
-            efpos[step][i] = parse(Float64, s)
+            efpos[step+buffer][i] = parse(Float64, s)
         end
     end
     close(f)
@@ -528,16 +528,16 @@ end
 
 function extend_traj(efpos, w, steps)
     half_w = Int((w-1)/2)
-    efpos_extend = [zeros(6) for _ = 1:steps+3*half_w]
+    efpos_extend = [zeros(6) for _ = 1:steps+half_w]
     for i = half_w+1:half_w+steps
         efpos_extend[i][:] = efpos[i-half_w]
     end
     for i = half_w:-1:1
         efpos_extend[i][:] = efpos[1][:] - (efpos[half_w-i+2][:] - efpos[1][:])
     end
-    for i = steps + half_w + 1 : steps + half_w*3
-        efpos_extend[i][:] = efpos[end][:]
-    end
+    # for i = steps + half_w + 1 : steps + half_w*3
+    #     efpos_extend[i][:] = efpos[end][:]
+    # end
     return efpos_extend
 end
 
@@ -654,12 +654,12 @@ function controller_ef_smooth!(mechanism, t)
 end
 ##
 # Smooth the trajectory based on end_effector
-steps = 500
+steps = 440
 cost = 0
 w = 101
 half_w = Int((w-1)/2)
 get_endeffector_traj(myfirst, myfirst+steps-1, qpos)
-efpos = read_end_effector(steps)
+efpos = read_end_effector(steps, 0)
 efpos_extend = extend_traj(efpos, w, steps)
 efvel_extend = get_ef_vel(efpos_extend, steps+3*half_w)
 efpos_smooth = [zeros(6) for _ = 1:steps+3*half_w]
@@ -779,26 +779,47 @@ function split_traj(qpos, myfirst, mylast, steps)
     qpos_1 = qpos[myfirst*9+1:(myfirst+period_one-1)*9+9]
     qpos_2 = qpos[(myfirst+period_one)*9+1:mylast*9+9]
     qpos_smooth, qvel_smooth = smooth(qpos_1[1:9], qpos_1[end-8:end], zeros(9), Int(floor(period_one*0.1)), period_one, true, 9)
+    pos_start = kinematics(qpos_smooth[end])
     vel_start = zeros(6)
     qvel_start = zeros(9)
     get_endeffector_traj(0, Int(length(qpos_2)/9-1), qpos_2)
-    efpos = read_end_effector(period_two)
+    efpos = read_end_effector(period_two, 0)
+    buffer = 40
+    # efpos[1] = efpos[buffer+1]
     c = efpos
     # num_points = 5
     # efpoints, interval = choose_inter_points(efpos, num_points, period_two)
     # efpos_smooth, efvel_smooth = get_endeffector_pos_and_vel(efpoints, num_points, interval, vel_start, period_two)
     efpos_extend = extend_traj(efpos, w, period_two)
-    efvel_extend = get_ef_vel(efpos_extend, period_two+3*half_w)
-    efpos_smooth = [zeros(6) for _ = 1:period_two+3*half_w]
-    efpos_smooth = sg_filter(efpos_extend, efpos_smooth, period_two+3*half_w)
-    efvel_smooth = get_ef_vel(efpos_smooth, period_two+3*half_w)
+    # efvel_extend = get_ef_vel(efpos_extend, period_two+half_w)
+    efpos_smooth = [zeros(6) for _ = 1:period_two+half_w]
+    efpos_smooth = sg_filter(efpos_extend, efpos_smooth, period_two+half_w)
+    extend_vector = [efpos_smooth[end] for _ = 1:4*half_w]
+    efpos_smooth = [efpos_smooth;extend_vector]
+    efvel_smooth = get_ef_vel(efpos_smooth, period_two+5*half_w)
     efpos_extend = efpos_extend[half_w+1:end]
-    efvel_extend = efvel_extend[half_w+1:end]
+    # efvel_extend = efvel_extend[half_w+1:end]
     efpos_smooth = efpos_smooth[half_w+1:end]
     efvel_smooth = efvel_smooth[half_w+1:end]
+    buffer_vector = [zeros(6) for _ = 1:buffer]
+    efpos_smooth = [buffer_vector;efpos_smooth]
+    efvel_smooth = [buffer_vector;efvel_smooth]
+    # v_d = 2*(efpos_smooth[buffer+1]-pos_start)/(buffer*dt)
+    v_d = efvel_smooth[buffer+1]
+    a_d = v_d/buffer
+    v = zeros(6)
+    for i = 1:buffer
+        v = v + a_d
+        efvel_smooth[i] = v
+        if i == 1
+            efpos_smooth[i] = pos_start + v*dt
+        else
+            efpos_smooth[i] = efpos_smooth[i-1] + v*dt
+        end
+    end
     c = efvel_smooth
     # display(efpos_smooth)
-    period_two += 2*half_w
+    period_two += 4*half_w+buffer
     println("Period_two:", period_two)
     @time ef2joints(efvel_smooth, qpos_2[1:9], qvel_start, period_two)
     qpos_from_ef, qvel_from_ef = read_q_from_ef(period_two)
@@ -814,6 +835,9 @@ function controller_integrated!(mechanism, t)
     for j = 1:3
         gripper_pos[j][t] = mech.bodies[1].state.x1[j]-final_pos[j]
         gripper_vel[j][t] = mech.bodies[1].state.v15[j]
+        if j == 3
+            gripper_pos[j][t] += 0.04
+        end
     end
     for j = 1:9
         if j == 8 || j == 9
@@ -840,7 +864,8 @@ cost = 0
 w = 101
 half_w = Int((w-1)/2)
 efvel_smooth, qpos_integrated, qvel_integrated, a, b, c = split_traj(qpos, myfirst, mylast, steps)
-steps += half_w*2
+buffer = 40
+steps += half_w*4+buffer
 initialize()
 joints_pos = [zeros(steps) for _ in 1:7]
 joints_vel = [zeros(steps) for _ in 1:7]
@@ -867,6 +892,7 @@ for i = 1:steps
         joints_vel_set[j][i] = qvel_integrated[i][j]
     end
 end
+buffer_vector = [zeros(6) for _ = 1:buffer]
 t = 1:steps
 p = plot(t, gripper_pos, title="Position of end_effector")
 savefig(p, "plots/integrated_pos_gripper.png")
@@ -877,7 +903,7 @@ p = plot!(t, joints_pos_set, label = ["s1" "s2" "s3" "s4" "s5" "s6" "s7"], ls=:d
 savefig(p, "plots/integrated_pos.png")
 p = plot(t, joints_vel)
 p = plot!(t, joints_vel_set, label = ["s1" "s2" "s3" "s4" "s5" "s6" "s7"], ls=:dash)
-savefig(p, "plots/integrated_vel.png")
+savefig(p, "plots/integrated_vel_1.png")
 ##
 
 

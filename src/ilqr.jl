@@ -64,11 +64,14 @@ end
 
 function objective(xs, us, xT, Q, R, p)
     cost = 0
-    for i = 1:T
+    for i = 1:T-1
         cost += transpose(xs[i]-x_initial[i]) * Q * (xs[i]-x_initial[i])
         # cost += transpose(us[i]) * R * us[i]
+        if i < T-1
+            cost += transpose((us[i+1]-us[i])/dt) * R * ((us[i+1]-us[i])/dt)
+        end
     end
-    # cost += p * transpose(xs[T]-xT) * Q * (xs[T]-xT)
+    cost += p * transpose(xs[T]-x_initial[T]) * Q * (xs[T]-x_initial[T])
     return cost
 end
 
@@ -150,16 +153,16 @@ lambda = 1
 lambda_factor = 10
 threshold = 1e-5
 lambda_max = 1e5
-p = 1e9
+p = 1
 itr = 1
 need_rollout = true
 # Initialization
 z = minimal_to_maximal(mech, x1)
 x = x1
 u = us[1]
-t = [1, 1e-13, 1, 1e-13, 1, 1e-13, 1, 1e-13, 1, 1e-13, 1, 1e-13, 1, 1e-13, 1e-13, 1e-13, 1e-13, 1e-13];
+t = [1, 1e-13, 1, 1e-13, 1, 1e-13, 1, 1e-13, 1, 1e-13, 1, 1e-13, 1, 1e-13, 1, 1e-13, 1, 1e-13];
 Q = Diagonal(1 * t)
-R = Diagonal(100 * ones(m))
+R = Diagonal(1 * ones(m))
 xs = Vector{Float64}[]
 for i = 1:T-1
     global u, x, z
@@ -172,10 +175,9 @@ for i = 1:T-1
     end
 end
 
-print("Initial cost:", objective(xs, us, xT, Q, R, p), "\n")
-
 x_initial = xs
 u_initial = us
+print("Initial cost:", objective(xs, us, xT, Q, R, p), "\n")
 
 while true
     global z, x, Vx, Vxx, lambda, lambda_factor, lambda_max, alpha, alpha_factor, 
@@ -195,10 +197,14 @@ while true
             global z, u, x, xT, Q, R
             u = us[i]
             fx, fu = get_minimal_gradients!(mech, z, u)
-            lx = Q * (x - xT)
-            lu = R * u
+            lx = Q * (x - x_initial[i])
+            if i < T-1
+                lu = R * (us[i+1] - u) /(dt*dt)
+            else
+                lu = zeros(9)
+            end
             lxx = Q
-            luu = R 
+            luu = -R/(dt*dt)
             lux = zeros(m, n) # 9x18
             push!(fxs, fx)
             push!(fus, fu)
