@@ -54,7 +54,7 @@ function read_pos_and_vel()
 end
 
 function read_ctrl()
-    f = open("data/ctrl_ef.txt", "r")
+    f = open("data/ctrl.txt", "r")
     while !eof(f)
         s = readline(f)
         append!(ctrls, parse(Float64, s))
@@ -64,15 +64,16 @@ end
 
 function objective(xs, us, xT, Q, R, p)
     cost = 0
-    for i = 1:T-1
-        cost += transpose(xs[i]-xT) * Q * (xs[i]-xT)
-        cost += transpose(us[i]) * R * us[i]
+    for i = 1:T
+        cost += transpose(xs[i]-x_initial[i]) * Q * (xs[i]-x_initial[i])
+        # cost += transpose(us[i]) * R * us[i]
     end
-    cost += p * transpose(xs[T]-xT) * Q * (xs[T]-xT)
+    # cost += p * transpose(xs[T]-xT) * Q * (xs[T]-xT)
+    return cost
 end
 
 function initialize()
-    for j = 1:7
+    for j = 1:9
         set_minimal_coordinates!(mech, joints[j], [qpos[myfirst*9+j]])
     end
     for j = 1:9
@@ -98,15 +99,23 @@ us = [ctrls[(t-1)*9+1:(t-1)*9+9] for t = 1:T-1]
 
 # Test initial guess
 function controller_initial!(mechanism, t)
-    # for j = 1:3
-    #     gripper_pos[j][t] = mech.bodies[1].state.x1[j]
-    #     gripper_vel[j][t] = mech.bodies[1].state.v15[j]
-    # end
+    for i = 1:3
+        gripper_pos_original[i][t] = mech.bodies[1].state.x1[i]
+        gripper_vel_original[i][t] = mech.bodies[1].state.v15[i]
+    end
     if t == T
+        for i = 1:7
+            joints_pos_original[i][t] = minimal_coordinates(mech, joints[i])[1]
+            joints_vel_original[i][t] = minimal_velocities(mech, joints[i])[1]
+        end
         for i = 1:9
             set_input!(joints[i], [0])
         end
     else
+        for i = 1:7
+            joints_pos_original[i][t] = minimal_coordinates(mech, joints[i])[1]
+            joints_vel_original[i][t] = minimal_velocities(mech, joints[i])[1]
+        end
         for i = 1:9
             set_input!(joints[i], [us[t][i]])
         end
@@ -115,8 +124,10 @@ end
 initialize()
 gripper_pos = [zeros(T) for _ in 1:3]
 gripper_vel = [zeros(T) for _ in 1:3]
-gripper_pos_part = [zeros(T) for _ in 1:3]
-gripper_vel_part = [zeros(T) for _ in 1:3]
+gripper_pos_original = [zeros(T) for _ in 1:3]
+gripper_vel_original = [zeros(T) for _ in 1:3]
+joints_pos_original = [zeros(T) for _ in 1:7]
+joints_vel_original = [zeros(T) for _ in 1:7]
 storage_initial = simulate!(mech, T*0.002, controller_initial!, record = true)
 visualize(mech, storage_initial);
 
@@ -164,6 +175,7 @@ end
 print("Initial cost:", objective(xs, us, xT, Q, R, p), "\n")
 
 x_initial = xs
+u_initial = us
 
 while true
     global z, x, Vx, Vxx, lambda, lambda_factor, lambda_max, alpha, alpha_factor, 
@@ -306,7 +318,9 @@ function controller!(mechanism, t)
         for i = 1:7
             joints_pos[i][t] = minimal_coordinates(mech, joints[i])[1]
             joints_vel[i][t] = minimal_velocities(mech, joints[i])[1]
-            controls[i][t] = us[t][i]
+        end
+        for i = 1:9
+            # controls[i][t] = u_initial[t][i]
             set_input!(joints[i], [us[t][i]])
         end
     end
@@ -318,25 +332,23 @@ joints_pos = [zeros(T) for _ in 1:7]
 joints_vel = [zeros(T) for _ in 1:7]
 joints_pos_set = [zeros(T) for _ in 1:7]
 joints_vel_set = [zeros(T) for _ in 1:7]
-joints_pos_original = [zeros(T) for _ in 1:7]
-joints_vel_original = [zeros(T) for _ in 1:7]
 
 storage_test = simulate!(mech, T*0.002, controller!, record = true)
 visualize(mech, storage_test);
-for i = 1:T
-    for j = 1:7
-        joints_pos_original[j][i] = qpos[(myfirst+i-1)*9+j]
-        joints_vel_original[j][i] = qvel[(myfirst+i-1)*9+j]
-    end
-end
-for i = 1:3
-    gripper_pos_part[i] = gripper_pos_original[i][1:T]
-end
+# for i = 1:T
+#     for j = 1:7
+#         joints_pos_original[j][i] = qpos[(myfirst+i-1)*9+j]
+#         joints_vel_original[j][i] = qvel[(myfirst+i-1)*9+j]
+#     end
+# end
+# for i = 1:3
+#     gripper_pos_part[i] = gripper_pos_original[i][1:T]
+# end
 p = plot(t, gripper_pos, label = ["y1" "y2" "y3"], title="Position of end_effector")
-p = plot!(t, gripper_pos_part, label = ["o1" "o2" "o3"], ls=:dot)
+p = plot!(t, gripper_pos_original, label = ["o1" "o2" "o3"], ls=:dot)
 savefig(p, "plots/ilqr_pos_gripper.png")
 p = plot(t, gripper_vel)
-# p = plot(t, gripper_vel_part)
+p = plot(t, gripper_vel_original)
 savefig(p, "plots/ilqr_vel_gripper.png")
 p = plot(t, joints_pos, label = ["y1" "y2" "y3" "y4" "y5" "y6" "y7"], title="Position of joints")
 p = plot!(t, joints_pos_original, label = ["o1" "o2" "o3" "o4" "o5" "o6" "o7"], ls=:dot)
