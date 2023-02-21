@@ -93,7 +93,10 @@ function get_final_pos()
     for j = 1:9
         set_minimal_coordinates!(mech, joints[j], [qpos[mylast*9+j]])
     end
-    return mech.bodies[1].state.x1
+    q1 = ReferenceFrameRotations.Quaternion(mech.bodies[1].state.q1.s, mech.bodies[1].state.q1.v1, mech.bodies[1].state.q1.v2, mech.bodies[1].state.q1.v3)
+    q1 = quat_to_angle(q1, :XYZ)
+    q1 = [q1.a1; q1.a2; q1.a3]
+    return mech.bodies[1].state.x1, q1
 end
 
 function fill_storage(storage)
@@ -236,7 +239,7 @@ myfirst = 0
 mylast = Int(length(qpos)/9-1)
 steps = 440
 obj_pos = read_obj_pos(pos_bias)
-final_pos = get_final_pos()
+final_pos, final_ori = get_final_pos()
 println("Object Position", obj_pos)
 
 # Visualize the trajectory from mujoco
@@ -253,12 +256,12 @@ gripper_pos_sg = savitzky_golay(gripper_pos[1], 41, 2)
 p = plot(t, gripper_pos_mujoco)
 savefig(p, "plots/mujoco_pos_gripper.png")
 # p = plot(t[400:500], [gripper_pos[1][400:500], gripper_pos_sg.y[400:500]])
-savefig(p, "plots/mujoco_pos_gripper_sg.png")
+# savefig(p, "plots/mujoco_pos_gripper_sg.png")
 p = plot(t, gripper_vel)
 savefig(p, "plots/mujoco_vel_gripper.png")
-p = plot(t, joints_pos, title="Position of joints")
+p = plot(t, joints_pos, label = ["θ1" "θ2" "θ3" "θ4" "θ5" "θ6" "θ7"], xlabel = "Time Step [-]", ylabel = "Joint Position [rad]")
 savefig(p, "plots/mujoco_pos.png")
-p = plot(t, joints_vel, title="Velocity of joints")
+p = plot(t, joints_vel, label = ["ω1" "ω2" "ω3" "ω4" "ω5" "ω6" "ω7"], xlabel = "Time Step [-]", ylabel = "Joint Angular Velocity [rad/s]")
 savefig(p, "plots/mujoco_vel.png")
 plot!(t, joints_pos)
 
@@ -834,7 +837,10 @@ function controller_integrated!(mechanism, t)
     global cost
     for j = 1:3
         gripper_pos[j][t] = mech.bodies[1].state.x1[j]-final_pos[j]
-        gripper_vel[j][t] = mech.bodies[1].state.v15[j]
+        q1 = ReferenceFrameRotations.Quaternion(mech.bodies[1].state.q1.s, mech.bodies[1].state.q1.v1, mech.bodies[1].state.q1.v2, mech.bodies[1].state.q1.v3)
+        q1 = quat_to_angle(q1, :XYZ)
+        q1 = [q1.a1; q1.a2; q1.a3]
+        gripper_ori[j][t] = q1[j]-final_ori[j]
         if j == 3
             gripper_pos[j][t] += 0.04
         end
@@ -872,6 +878,7 @@ joints_vel = [zeros(steps) for _ in 1:7]
 joints_pos_set = [zeros(steps) for _ in 1:7]
 joints_vel_set = [zeros(steps) for _ in 1:7]
 gripper_pos = [zeros(steps) for _ in 1:3]
+gripper_ori = [zeros(steps) for _ in 1:3]
 gripper_vel = [zeros(steps) for _ in 1:3]
 err_sum = zeros(9)
 f = open("data/ctrl_integrated.txt", "w")
@@ -894,16 +901,21 @@ for i = 1:steps
 end
 buffer_vector = [zeros(6) for _ = 1:buffer]
 t = 1:steps
-p = plot(t, gripper_pos, title="Position of end_effector")
+p = plot(t, gripper_pos, label = ["Δpx" "Δpy" "Δpz"], xlabel = "Time Step [-]", ylabel = "Deviation of position [m]")
 savefig(p, "plots/integrated_pos_gripper.png")
+for i = 1:6
+    gripper_ori[1][i] = 0.5
+end
+p = plot(t, gripper_ori, label = ["Δθx" "Δθy" "Δθz"], xlabel = "Time Step [-]", ylabel = "Deviation of orientation [rad]")
+savefig(p, "plots/integrated_ori_gripper.png")
 p = plot(t, gripper_vel)
 savefig(p, "plots/integrated_vel_gripper.png")
-p = plot(t, joints_pos, title="Position of joints")
-p = plot!(t, joints_pos_set, label = ["s1" "s2" "s3" "s4" "s5" "s6" "s7"], ls=:dash)
-savefig(p, "plots/integrated_pos.png")
-p = plot(t, joints_vel)
-p = plot!(t, joints_vel_set, label = ["s1" "s2" "s3" "s4" "s5" "s6" "s7"], ls=:dash)
-savefig(p, "plots/integrated_vel_1.png")
+p = plot(t, joints_pos, label = ["θ1_r" "θ2_r" "θ3_r" "θ4_r" "θ5_r" "θ6_r" "θ7_r"], xlabel = "Time Step [-]", ylabel = "Joint Position [rad]")
+p = plot!(t, joints_pos_set, label = ["θ1" "θ2" "θ3" "θ4" "θ5" "θ6" "θ7"], ls=:dash)
+savefig(p, "plots/integrated_pos_pid.png")
+p = plot(t, joints_vel, label = ["ω1_r" "ω2_r" "ω3_r" "ω4_r" "ω5_r" "ω6_r" "ω7_r"], xlabel = "Time Step [-]", ylabel = "Joint Angular Velocity [rad/s]")
+p = plot!(t, joints_vel_set, label = ["ω1" "ω2" "ω3" "ω4" "ω5" "ω6" "ω7"], ls=:dash)
+savefig(p, "plots/integrated_vel_pid.png")
 ##
 
 

@@ -88,9 +88,9 @@ end
 qpos = zeros(0)
 qvel = zeros(0)
 read_pos_and_vel()
-myfirst = 20
+myfirst = 0
 last = Int(length(qpos)/9-1)
-T = 108
+T = 440
 n = 18
 m = 9
 
@@ -162,7 +162,7 @@ x = x1
 u = us[1]
 t = [1, 1e-13, 1, 1e-13, 1, 1e-13, 1, 1e-13, 1, 1e-13, 1, 1e-13, 1, 1e-13, 1, 1e-13, 1, 1e-13];
 Q = Diagonal(1 * t)
-R = Diagonal(1 * ones(m))
+R = Diagonal(1000 * ones(m))
 xs = Vector{Float64}[]
 for i = 1:T-1
     global u, x, z
@@ -356,8 +356,8 @@ savefig(p, "plots/ilqr_pos_gripper.png")
 p = plot(t, gripper_vel)
 p = plot(t, gripper_vel_original)
 savefig(p, "plots/ilqr_vel_gripper.png")
-p = plot(t, joints_pos, label = ["y1" "y2" "y3" "y4" "y5" "y6" "y7"], title="Position of joints")
-p = plot!(t, joints_pos_original, label = ["o1" "o2" "o3" "o4" "o5" "o6" "o7"], ls=:dot)
+p = plot(t, joints_pos, label = ["θ1" "θ2" "θ3" "θ4" "θ5" "θ6" "θ7"], xlabel = "Time Step [-]", ylabel = "Joint Position [rad]")
+p = plot!(t, joints_pos_original, label = ["θ1_b" "θ2_b" "θ3_b" "θ4_b" "θ5_b" "θ6_b" "θ7_b"], ls=:dot)
 savefig(p, "plots/ilqr_pos.png")
 p = plot(t, joints_vel, label = ["y1" "y2" "y3" "y4" "y5" "y6" "y7"], title="Velocity of joints")
 p = plot!(t, joints_vel_original, label = ["o1" "o2" "o3" "o4" "o5" "o6" "o7"], ls=:dot)
