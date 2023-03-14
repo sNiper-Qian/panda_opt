@@ -333,6 +333,7 @@ function controller!(mechanism, t)
 end
 initialize()
 t = range(1, T)
+t *= 0.002
 controls = [zeros(T) for _ in 1:7]
 joints_pos = [zeros(T) for _ in 1:7]
 joints_vel = [zeros(T) for _ in 1:7]
@@ -356,7 +357,7 @@ savefig(p, "plots/ilqr_pos_gripper.png")
 p = plot(t, gripper_vel)
 p = plot(t, gripper_vel_original)
 savefig(p, "plots/ilqr_vel_gripper.png")
-p = plot(t, joints_pos, label = ["θ1" "θ2" "θ3" "θ4" "θ5" "θ6" "θ7"], xlabel = "Time Step [-]", ylabel = "Joint Position [rad]")
+p = plot(t, joints_pos, label = ["θ1" "θ2" "θ3" "θ4" "θ5" "θ6" "θ7"], xlabel = "Time [s]", ylabel = "Joint Position [rad]")
 p = plot!(t, joints_pos_original, label = ["θ1_b" "θ2_b" "θ3_b" "θ4_b" "θ5_b" "θ6_b" "θ7_b"], ls=:dot)
 savefig(p, "plots/ilqr_pos.png")
 p = plot(t, joints_vel, label = ["y1" "y2" "y3" "y4" "y5" "y6" "y7"], title="Velocity of joints")

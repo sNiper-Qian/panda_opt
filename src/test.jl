@@ -245,6 +245,7 @@ println("Object Position", obj_pos)
 # Visualize the trajectory from mujoco
 storage = Storage(steps, 9)
 t = range(1, steps)
+t *= 0.002
 joints_pos = [zeros(steps) for _ in 1:7]
 joints_vel = [zeros(steps) for _ in 1:7]
 gripper_pos_mujoco = [zeros(steps)]
@@ -259,9 +260,9 @@ savefig(p, "plots/mujoco_pos_gripper.png")
 # savefig(p, "plots/mujoco_pos_gripper_sg.png")
 p = plot(t, gripper_vel)
 savefig(p, "plots/mujoco_vel_gripper.png")
-p = plot(t, joints_pos, label = ["θ1" "θ2" "θ3" "θ4" "θ5" "θ6" "θ7"], xlabel = "Time Step [-]", ylabel = "Joint Position [rad]")
+p = plot(t, joints_pos, label = ["θ1" "θ2" "θ3" "θ4" "θ5" "θ6" "θ7"], xlabel = "Time [s]", ylabel = "Joint Position [rad]")
 savefig(p, "plots/mujoco_pos.png")
-p = plot(t, joints_vel, label = ["ω1" "ω2" "ω3" "ω4" "ω5" "ω6" "ω7"], xlabel = "Time Step [-]", ylabel = "Joint Angular Velocity [rad/s]")
+p = plot(t, joints_vel, label = ["ω1" "ω2" "ω3" "ω4" "ω5" "ω6" "ω7"], xlabel = "Time [s]", ylabel = "Joint Angular Velocity [rad/s]")
 savefig(p, "plots/mujoco_vel.png")
 plot!(t, joints_pos)
 
@@ -901,21 +902,22 @@ for i = 1:steps
 end
 buffer_vector = [zeros(6) for _ = 1:buffer]
 t = 1:steps
-p = plot(t, gripper_pos, label = ["Δpx" "Δpy" "Δpz"], xlabel = "Time Step [-]", ylabel = "Deviation of position [m]")
+t *= 0.002
+p = plot(t, gripper_pos, label = ["Δpx" "Δpy" "Δpz"], xlabel = "Time [s]", ylabel = "Deviation of position [m]")
 savefig(p, "plots/integrated_pos_gripper.png")
 for i = 1:6
     gripper_ori[1][i] = 0.5
 end
-p = plot(t, gripper_ori, label = ["Δθx" "Δθy" "Δθz"], xlabel = "Time Step [-]", ylabel = "Deviation of orientation [rad]")
+p = plot(t, gripper_ori, label = ["Δθx" "Δθy" "Δθz"], xlabel = "Time [s]", ylabel = "Deviation of orientation [rad]")
 savefig(p, "plots/integrated_ori_gripper.png")
 p = plot(t, gripper_vel)
 savefig(p, "plots/integrated_vel_gripper.png")
-p = plot(t, joints_pos, label = ["θ1_r" "θ2_r" "θ3_r" "θ4_r" "θ5_r" "θ6_r" "θ7_r"], xlabel = "Time Step [-]", ylabel = "Joint Position [rad]")
-p = plot!(t, joints_pos_set, label = ["θ1" "θ2" "θ3" "θ4" "θ5" "θ6" "θ7"], ls=:dash)
-savefig(p, "plots/integrated_pos_pid.png")
-p = plot(t, joints_vel, label = ["ω1_r" "ω2_r" "ω3_r" "ω4_r" "ω5_r" "ω6_r" "ω7_r"], xlabel = "Time Step [-]", ylabel = "Joint Angular Velocity [rad/s]")
-p = plot!(t, joints_vel_set, label = ["ω1" "ω2" "ω3" "ω4" "ω5" "ω6" "ω7"], ls=:dash)
-savefig(p, "plots/integrated_vel_pid.png")
+# p = plot(t, joints_pos, label = ["θ1_r" "θ2_r" "θ3_r" "θ4_r" "θ5_r" "θ6_r" "θ7_r"], xlabel = "Time [s]", ylabel = "Joint Position [rad]")
+p = plot(t, joints_pos_set, label = ["θ1" "θ2" "θ3" "θ4" "θ5" "θ6" "θ7"], xlabel = "Time [s]", ylabel = "Joint Position [rad]")
+savefig(p, "plots/integrated_pos.png")
+# p = plot(t, joints_vel, label = ["ω1_r" "ω2_r" "ω3_r" "ω4_r" "ω5_r" "ω6_r" "ω7_r"], xlabel = "Time [s]", ylabel = "Joint Angular Velocity [rad/s]")
+p = plot(t, joints_vel_set, label = ["ω1" "ω2" "ω3" "ω4" "ω5" "ω6" "ω7"], xlabel = "Time [s]", ylabel = "Joint Angular Velocity [rad/s]")
+savefig(p, "plots/integrated_vel.png")
 ##
 
 
